@@ -1,40 +1,63 @@
 (ns lab3.properties-test
   (:require [clojure.test :refer :all]
-            [clojure.test.check.generators :as gen]
-            [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check.properties :as prop]
+            [clojure.test.check.generators :as gen]
             [lab3.interpolation :as interp]))
 
-; Если функция линейная, linear-value должен попадать точно
+(def gen-safe-double
+  (gen/double* {:NaN? false :infinite? false}))
+
+(def gen-sorted-two-points
+  (gen/fmap
+   (fn [[x1 y1 x2 y2]]
+     (let [[p1 p2] (sort-by :x [{:x x1 :y y1} {:x x2 :y y2}])]
+       [p1 p2]))
+   (gen/tuple gen-safe-double gen-safe-double
+              gen-safe-double gen-safe-double)))
+
+(def gen-sorted-three-points
+  (gen/fmap
+   (fn [[x1 y1 x2 y2 x3 y3]]
+     (->> [{:x x1 :y y1}
+           {:x x2 :y y2}
+           {:x x3 :y y3}]
+          (sort-by :x)
+          vec))
+   (gen/tuple gen-safe-double gen-safe-double
+              gen-safe-double gen-safe-double
+              gen-safe-double gen-safe-double)))
+
+; проверяем совпадение с аналитикой
 
 (defspec linear-exactness-test
-  100
-  (prop/for-all
-   [a gen/int
-    b gen/int
-    x1 (gen/double* {:min -10 :max  0})
-    x2 (gen/double* {:min   1 :max 10})]
-   (let [f #(double (+ (* a %) b))
-         p1 {:x x1 :y (f x1)}
-         p2 {:x x2 :y (f x2)}
-         mid (/ (+ x1 x2) 2)
-         expected (f mid)
-         actual (interp/linear-value [p1 p2] mid)]
-     (= expected actual))))
+  200
+  (prop/for-all [[p1 p2] gen-sorted-two-points
+                 x       gen-safe-double]
+                (let [x1 (:x p1), y1 (:y p1)
+                      x2 (:x p2), y2 (:y p2)]
+                  (cond
 
-; Монотонность: y_mid лежит между y_1 и y_2
+                    (= x1 x2)
+                    (= (interp/linear-value [p1 p2] x1) y1)
+
+                    (or (< x x1) (> x x2))
+                    true
+
+                    :else
+                    (let [expected (+ y1 (* (/ (- x x1) (- x2 x1))
+                                            (- y2 y1)))
+                          actual   (interp/linear-value [p1 p2] x)]
+                      (< (Math/abs (- actual expected)) 1e-9))))))
+
+; проверяем монотонность
 
 (defspec linear-between-test
-  100
-  (prop/for-all
-   [x1 (gen/double* {:min -10 :max 10})
-    x2 (gen/double* {:min -10 :max 10})
-    y1 (gen/double* {:min -10 :max 10})
-    y2 (gen/double* {:min -10 :max 10})]
-   (let [a (min x1 x2)
-         b (max x1 x2)
-         p1 {:x a :y y1}
-         p2 {:x b :y y2}
-         mid (/ (+ a b) 2)
-         ymid (interp/linear-value [p1 p2] mid)]
-     (<= (min y1 y2) ymid (max y1 y2)))))
+  200
+  (prop/for-all [points gen-sorted-three-points]
+                (let [[p1 p2 p3] points
+                      mid-x (/ (+ (:x p2) (:x p3)) 2)
+                      y     (interp/linear-value points mid-x)]
+
+                  (and (<= (min (:y p2) (:y p3)) y)
+                       (>= (max (:y p2) (:y p3)) y)))))

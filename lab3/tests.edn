@@ -6,7 +6,7 @@
            :ns-patterns [".*interpolation-test*"]}
           {:id :property-based
            :test-paths ["test"]
-           :ns-patterns [".*test-property-based*"]}
+           :ns-patterns [".*properties-test*"]}
           {:id :core
            :test-paths ["test"]
            :ns-patterns [".*core-test*"]}]}

@@ -24,5 +24,5 @@
                     ["run" "-m" "clj-kondo.main" "--lint" "src" "test" "--config" "../.clj-kondo/config.edn"]]
             "kaocha" ["run" "-m" "kaocha.runner"]
             "test" ["kaocha"]
-            "test-unit" ["kaocha" "--focus" ":interpolation-test"]
+            "test-unit" ["kaocha" "--focus" ":unit"]
             "test-property" ["kaocha" "--focus" ":property-based"]})
