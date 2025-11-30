@@ -1,5 +1,5 @@
 (ns lab3.interpolation-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest is testing]]
             [lab3.interpolation :as interp]))
 
 ; Линейная интерполяция

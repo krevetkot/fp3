@@ -1,6 +1,5 @@
 (ns lab3.properties-test
-  (:require [clojure.test :refer :all]
-            [clojure.test.check.clojure-test :refer [defspec]]
+  (:require [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.generators :as gen]
             [lab3.interpolation :as interp]))
@@ -55,7 +54,7 @@
 (defspec linear-between-test
   200
   (prop/for-all [points gen-sorted-three-points]
-                (let [[p1 p2 p3] points
+                (let [[_ p2 p3] points
                       mid-x (/ (+ (:x p2) (:x p3)) 2)
                       y     (interp/linear-value points mid-x)]
 

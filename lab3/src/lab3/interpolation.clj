@@ -1,6 +1,6 @@
 (ns lab3.interpolation)
 
-; ЛИНЕЙНАЯ ИНТЕРПОЛЯЦИЯ
+; Linear
 
 (defn find-segment
   "Находит пару соседних точек [p1 p2], таких что x1 <= x <= x2."
@@ -25,7 +25,7 @@
         (let [t (/ (- x x1) (- x2 x1))]
           (+ y1 (* t (- y2 y1))))))))
 
-; НЬЮТОН
+; Newton
 
 (defn choose-window
   "Выбирает окно из n точек для интерполяции Ньютона"
@@ -94,7 +94,7 @@
         coeffs (divided-differences window)]
     (newton-eval coeffs window x)))
 
-; ПОТОКОВАЯ ОБРАБОТКА 
+; Stream processing
 
 (defn normalize-zero [x]
   (let [d (double x)]
@@ -115,24 +115,18 @@
 (defn interpolate-at-x
   "Возвращает вектор структур {:alg :linear :x x :y y}, ..."
   [opts points x]
-  (let [res []]
-
-    ; linear
-    (let [res (if (:linear? opts)
-                (let [y (linear-value points x)]
-                  (if (some? y)
-                    (conj res {:alg :linear :x (normalize-zero x) :y (normalize-zero y)})
-                    res))
-                res)]
-
-      ; newton
-      (let [res (if (:newton? opts)
-                  (if (>= (count points) (:n opts))
-                    (let [y (newton-value points (:n opts) x)]
-                      (conj res {:alg :newton :x (normalize-zero x) :y (normalize-zero y)}))
-                    res)
-                  res)]
-        res))))
+  (let [res1 (if (:linear? opts)
+               (if-some [y (linear-value points x)]
+                 [{:alg :linear :x x :y y}]
+                 [])
+               [])
+        res2 (if (:newton? opts)
+               (if (>= (count points) (:n opts))
+                 (let [y (newton-value points (:n opts) x)]
+                   [{:alg :newton :x x :y y}])
+                 [])
+               [])]
+    (into res1 res2)))
 
 (defn produce-outputs
   [opts points next-x max-x]

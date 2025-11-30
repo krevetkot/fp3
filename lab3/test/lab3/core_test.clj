@@ -1,5 +1,5 @@
 (ns lab3.core-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest is testing]]
             [lab3.core :as core]
             [lab3.interpolation :as interp]))
 
@@ -16,12 +16,25 @@
     (let [opts   {:linear? true :newton? false :step 1 :n 4}
           state0 (interp/init-state)
 
-          ; первая точка, еще ничего не готово
+          ;; первая точка
           {:keys [state outputs]} (interp/process-point opts state0 {:x 0 :y 0})
+
+          outputs (map (fn [m]
+                         (-> m
+                             (update :x interp/normalize-zero)
+                             (update :y interp/normalize-zero)))
+                       outputs)
+
           _ (is (= [] outputs))
 
-          ; после второй можем начинать
-          {:keys [state outputs]} (interp/process-point opts state {:x 1 :y 1})]
+          ;; вторая точка
+          {:keys [outputs]} (interp/process-point opts state {:x 1 :y 1})
+
+          outputs (map (fn [m]
+                         (-> m
+                             (update :x interp/normalize-zero)
+                             (update :y interp/normalize-zero)))
+                       outputs)]
 
       (is (= [{:alg :linear :x 0.0 :y 0.0}
               {:alg :linear :x 1.0 :y 1.0}]
