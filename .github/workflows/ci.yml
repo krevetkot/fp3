@@ -40,10 +40,10 @@ jobs:
         sudo mv lein /usr/local/bin/
     
     - name: Run unit tests
-      run: lein test-unit
+      run: lein interpolation-test
     
     - name: Run property-based tests
-      run: lein test-property
+      run: lein property-based
     
     - name: Run all tests
       run: lein test
