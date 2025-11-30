@@ -54,9 +54,15 @@
 (defspec linear-between-test
   200
   (prop/for-all [points gen-sorted-three-points]
-                (let [[_ p2 p3] points
-                      mid-x (/ (+ (:x p2) (:x p3)) 2)
-                      y     (interp/linear-value points mid-x)]
+                (let [[p1 p2 p3] points
+                      x1 (:x p1)
+                      x2 (:x p2)
+                      x3 (:x p3)]
 
-                  (and (<= (min (:y p2) (:y p3)) y)
-                       (>= (max (:y p2) (:y p3)) y)))))
+                  (if (and (= x1 x2) (= x2 x3))
+                    true
+
+                    (let [mid-x (/ (+ (:x p2) (:x p3)) 2)
+                          y     (interp/linear-value points mid-x)]
+                      (and (<= (min (:y p2) (:y p3)) y)
+                           (>= (max (:y p2) (:y p3)) y)))))))
