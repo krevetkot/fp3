@@ -1,6 +1,21 @@
 (ns lab3.interpolation)
 
-; Linear
+;; Polymorphism
+
+(defmulti add-point
+  "Добавляет точку в состояние алгоритма"
+  (fn [alg _ _] alg))
+
+(defmulti alg-ready?
+  "Проверяет, готов ли алгоритм к интерполяции (достаточно ли точек и параметров)."
+  (fn [alg _ _] alg))
+
+(defmulti interpolate
+  "Вычисляет значение интерполяции алгоритма в точке x.
+   Возвращает либо {:alg :linear/:newton :x x :y y}, либо nil."
+  (fn [alg _ _] alg))
+
+;; Linear
 
 (defn find-segment
   "Находит пару соседних точек [p1 p2], таких что x1 <= x <= x2."
@@ -25,7 +40,19 @@
         (let [t (/ (- x x1) (- x2 x1))]
           (+ y1 (* t (- y2 y1))))))))
 
-; Newton
+;; Реализация мульти-методов для линейной интерполяции
+
+(defmethod add-point :linear [_ state point]
+  (update state :points conj point))
+
+(defmethod alg-ready? :linear [_ _opts state]
+  (>= (count (:points state)) 2))
+
+(defmethod interpolate :linear [_ state x]
+  (when-some [y (linear-value (:points state) x)]
+    {:alg :linear :x x :y y}))
+
+;; Newton
 
 (defn choose-window
   "Выбирает окно из n точек для интерполяции Ньютона"
@@ -94,7 +121,22 @@
         coeffs (divided-differences window)]
     (newton-eval coeffs window x)))
 
-; Stream processing
+;; Реализация мульти-методов для Ньютона
+
+(defmethod add-point :newton [_ state point]
+  (update state :points conj point))
+
+(defmethod alg-ready? :newton [_ opts state]
+  (>= (count (:points state)) (:n opts)))
+
+(defmethod interpolate :newton [_ state x]
+  (let [points (:points state)
+        n      (:n state)]
+    (when (and n (>= (count points) n))
+      (let [y (newton-value points n x)]
+        {:alg :newton :x x :y y}))))
+
+  ;; Stream processing
 
 (defn normalize-zero [x]
   (let [d (double x)]
@@ -102,55 +144,74 @@
 
 (defn init-state
   []
-  {:points []
-   :next-x nil})
-
-(defn ready?
-  [opts points]
-  (or (and (:linear? opts)
-           (>= (count points) 2))
-      (and (:newton? opts)
-           (>= (count points) (:n opts)))))
+  {:linear {:points [] :next-x nil}
+   :newton {:points [] :next-x nil}})
 
 (defn interpolate-at-x
   "Возвращает вектор структур {:alg :linear :x x :y y}, ..."
-  [opts points x]
-  (let [res1 (if (:linear? opts)
-               (if-some [y (linear-value points x)]
-                 [{:alg :linear :x x :y y}]
-                 [])
-               [])
-        res2 (if (:newton? opts)
-               (if (>= (count points) (:n opts))
-                 (let [y (newton-value points (:n opts) x)]
-                   [{:alg :newton :x x :y y}])
-                 [])
-               [])]
-    (into res1 res2)))
+  [opts state x]
+  (let [res1 (when (:linear? opts)
+               (interpolate :linear (:linear state) x))
+        res2 (when (:newton? opts)
+               (interpolate :newton (:newton state) x))]
+    (vec (remove nil? [res1 res2]))))
+
+(defn produce-outputs-for-alg
+  "Считает выходы для одного алгоритма (linear/newton) и обновляет его стейт."
+  [alg opts alg-state max-x]
+  (if-not (alg-ready? alg opts alg-state)
+      ;; алгоритм ещё не готов → не трогаем :next-x, не считаем выходы
+    {:state alg-state
+     :outputs []}
+    (let [step    (:step opts)
+          start-x (or (:next-x alg-state)
+                      (some-> alg-state :points first :x))]
+      (if (nil? start-x)
+        {:state alg-state
+         :outputs []}
+        (loop [x    start-x
+               outs []]
+          (if (> x max-x)
+            {:state   (assoc alg-state :next-x x)
+             :outputs outs}
+            (let [res  (interpolate alg alg-state x)
+                  outs' (if res (conj outs res) outs)]
+              (recur (+ x step) outs'))))))))
 
 (defn produce-outputs
-  [opts points next-x max-x]
-  (if-not (ready? opts points)
-    {:next-x next-x
-     :outputs []}
+  "Считает выходы для всех включённых алгоритмов на отрезке [*, max-x]."
+  [opts state max-x]
+  (let [{lin-state :state lin-outs :outputs}
+        (if (:linear? opts)
+          (produce-outputs-for-alg :linear opts (:linear state) max-x)
+          {:state (:linear state) :outputs []})
 
-    (let [step (:step opts)
-          start-x (or next-x (:x (first points)))]
-      (loop [x start-x
-             outs []]
-        (if (> x max-x)
-          {:next-x x
-           :outputs outs}
-          (let [vals (interpolate-at-x opts points x)
-                outs' (into outs vals)]
-            (recur (+ x step) outs')))))))
+        {new-state :state new-outs :outputs}
+        (if (:newton? opts)
+          (produce-outputs-for-alg :newton opts (:newton state) max-x)
+          {:state (:newton state) :outputs []})
+
+        outputs (into lin-outs new-outs)]
+    {:state   {:linear lin-state
+               :newton new-state}
+     :outputs outputs}))
 
 (defn process-point
   [opts state point]
-  (let [points' (conj (:points state) point)
+  (let [;; добавляем точку в стейт каждого алгоритма
+        linear-state' (if (:linear? opts)
+                        (add-point :linear (:linear state) point)
+                        (:linear state))
+        newton-state' (if (:newton? opts)
+                        (assoc (add-point :newton (:newton state) point) :n (:n opts))
+                        (:newton state))
+
+        state' {:linear linear-state'
+                :newton newton-state'}
+
         max-x (:x point)
-        {:keys [next-x outputs]}
-        (produce-outputs opts points' (:next-x state) max-x)]
-    {:state {:points points'
-             :next-x next-x}
+
+        {:keys [state outputs]}
+        (produce-outputs opts state' max-x)]
+    {:state   state
      :outputs outputs}))

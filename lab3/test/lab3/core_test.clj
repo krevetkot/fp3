@@ -18,24 +18,20 @@
 
           ;; первая точка
           {:keys [state outputs]} (interp/process-point opts state0 {:x 0 :y 0})
-
-          outputs (map (fn [m]
-                         (-> m
-                             (update :x interp/normalize-zero)
-                             (update :y interp/normalize-zero)))
-                       outputs)
-
-          _ (is (= [] outputs))
-
-          ;; вторая точка
-          {:keys [outputs]} (interp/process-point opts state {:x 1 :y 1})
-
-          outputs (map (fn [m]
-                         (-> m
-                             (update :x interp/normalize-zero)
-                             (update :y interp/normalize-zero)))
+          outputs (map #(-> %
+                            (update :x interp/normalize-zero)
+                            (update :y interp/normalize-zero))
                        outputs)]
 
-      (is (= [{:alg :linear :x 0.0 :y 0.0}
-              {:alg :linear :x 1.0 :y 1.0}]
-             outputs)))))
+      (is (= [] outputs))
+
+      ;; вторая точка
+      (let [{:keys [_ outputs]} (interp/process-point opts state {:x 1 :y 1})
+            outputs (map #(-> %
+                              (update :x interp/normalize-zero)
+                              (update :y interp/normalize-zero))
+                         outputs)]
+
+        (is (= [{:alg :linear :x 0.0 :y 0.0}
+                {:alg :linear :x 1.0 :y 1.0}]
+               outputs))))))
