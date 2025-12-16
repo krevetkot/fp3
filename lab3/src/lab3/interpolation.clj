@@ -1,5 +1,13 @@
 (ns lab3.interpolation)
 
+(defn limit-queue
+  "Обрезает очередь до max-size, выкидывая элементы слева."
+  [q max-size]
+  (loop [q q]
+    (if (<= (count q) max-size)
+      q
+      (recur (pop q)))))
+
 ;; Polymorphism
 
 (defmulti add-point
@@ -14,6 +22,10 @@
   "Вычисляет значение интерполяции алгоритма в точке x.
    Возвращает либо {:alg :linear/:newton :x x :y y}, либо nil."
   (fn [alg _ _] alg))
+
+(defmulti limit-state
+  "Ограничивает размер state."
+  (fn [alg _opts _state] alg))
 
 ;; Linear
 
@@ -51,6 +63,9 @@
 (defmethod interpolate :linear [_ state x]
   (when-some [y (linear-value (:points state) x)]
     {:alg :linear :x x :y y}))
+
+(defmethod limit-state :linear [_ _opts state]
+  (update state :points limit-queue 2))
 
 ;; Newton
 
@@ -136,16 +151,23 @@
       (let [y (newton-value points n x)]
         {:alg :newton :x x :y y}))))
 
+(defmethod limit-state :newton [_ _opts state]
+  (let [n (:n state)]
+    (if n
+      (update state :points limit-queue (inc n))
+      state)))
+
   ;; Stream processing
 
 (defn normalize-zero [x]
   (let [d (double x)]
     (if (= d -0.0) 0.0 d)))
 
-(defn init-state
-  []
-  {:linear {:points [] :next-x nil}
-   :newton {:points [] :next-x nil}})
+(defn init-state []
+  {:linear {:points clojure.lang.PersistentQueue/EMPTY
+            :next-x nil}
+   :newton {:points clojure.lang.PersistentQueue/EMPTY
+            :next-x nil}})
 
 (defn interpolate-at-x
   "Возвращает вектор структур {:alg :linear :x x :y y}, ..."
@@ -198,20 +220,34 @@
 
 (defn process-point
   [opts state point]
-  (let [;; добавляем точку в стейт каждого алгоритма
-        linear-state' (if (:linear? opts)
-                        (add-point :linear (:linear state) point)
-                        (:linear state))
-        newton-state' (if (:newton? opts)
-                        (assoc (add-point :newton (:newton state) point) :n (:n opts))
-                        (:newton state))
+  (let [linear-state'
+        (if (:linear? opts)
+          (add-point :linear (:linear state) point)
+          (:linear state))
 
-        state' {:linear linear-state'
-                :newton newton-state'}
+        newton-state'
+        (if (:newton? opts)
+          (assoc (add-point :newton (:newton state) point)
+                 :n (:n opts))
+          (:newton state))
+
+        ;; авто-очистка (ограничение очереди)
+        linear-state''
+        (if (:linear? opts)
+          (limit-state :linear opts linear-state')
+          linear-state')
+
+        newton-state''
+        (if (:newton? opts)
+          (limit-state :newton opts newton-state')
+          newton-state')
+
+        state' {:linear linear-state''
+                :newton newton-state''}
 
         max-x (:x point)
 
         {:keys [state outputs]}
         (produce-outputs opts state' max-x)]
-    {:state   state
+    {:state state
      :outputs outputs}))
