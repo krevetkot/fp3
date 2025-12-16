@@ -182,7 +182,6 @@
   "Считает выходы для одного алгоритма (linear/newton) и обновляет его стейт."
   [alg opts alg-state max-x]
   (if-not (alg-ready? alg opts alg-state)
-      ;; алгоритм ещё не готов → не трогаем :next-x, не считаем выходы
     {:state alg-state
      :outputs []}
     (let [step    (:step opts)
@@ -231,7 +230,7 @@
                  :n (:n opts))
           (:newton state))
 
-        ;; авто-очистка (ограничение очереди)
+        ;; авто-очистка
         linear-state''
         (if (:linear? opts)
           (limit-state :linear opts linear-state')
